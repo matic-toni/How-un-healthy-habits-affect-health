@@ -1,0 +1,489 @@
+---
+title: "Kako (ne) zdrave navike utječu na zdravlje"
+author: "Dora Doljanin, Filip Pavičić, Marko Andreis, Toni Matić"
+date: "17/12/2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+subtitle: Projektni zadatak iz kolegija Statistička analiza podataka
+---
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1 Motivacija i opis problema
+
+
+Čovjek oduvijek teži razumjeti odnos svojeg ponašanja i navika sa svojim zdravljem. Navike mogu biti dobre i loše, a moderni način života uvelike utječe na njih. Boljim razumijevanjem kako i koje nezdrave navike utječu na zdravlje, osvještavamo se o potencijalnoj potrebi za promjene ili ustrajnosti na već usvojenim dobrim navikama.
+Cilj ovog projektnog zadatka je istražiti zdravstvene indikatore koji spadaju u nezdrave navike i zdravstvene tegobe i bolesti. Posebice, zanima nas postoje li veze među njima. Ti indikatori dani su za više gradova, stoga nas također zanima postoje li gradovi koji općenito imaju viši zdravstveni standard.
+
+
+## 2 Opis skupa podataka
+
+
+Dani su podatci jedne godine za 500 američkih gradova. Za svaki grad mjerene su 4 vrste čestih nezdravih navika (kao što je prekomjerno pijenje alkohola ili vođenje fizički neaktivnog života). Te mjere iskazane su kao udio stanovništva pojedinog grada koji ima određenu naviku. Pored toga, mjereno je i 12 zdravstvenih stanja ili bolesti (kao što je artritis, visoki krvni tlak, kronične srčane bolesti itd.), također kao udio stanovništva pojedinog grada koji pati od dane bolesti.
+
+```{r, fig.cap="Prikaz gradova uključenih u skup podataka", out.width = '50%', fig.align="center"}
+knitr::include_graphics('usa_map.jpeg')
+```
+
+
+Skup podataka koji se koristi u analizi daljnjih problema nalazi se u datoteci `data_health_and_unhealthy_habits.csv` te se pomoću naredbe `read.csv` koja kao argument prima datoteku s podatcima radni podatci pohranjuju u željenu varijablu `habits`. U nastavku je prikazan dio koda koji izvršava navedeno. Dodatno, izdvajaju se samo oni retci koji za vrijednost varijable `DataValueTypeID` poprimaju `CrdPrv`, umjesto alternative `AgeAdj` čime su za daljnju analizu odlučuje za podatke koji nisu prilagođeni starosti stanovništva iz uzorka.
+
+```{r}
+habits = read.csv('data_health_and_unhealthy_habits.csv')
+crd_habits = habits[habits$DataValueTypeID =="CrdPrv",]
+
+```
+
+Podatci se sastoje od 16000 zapisa (gradovi u kombinaciji s nezdravim navikama ili zdravstvenim tegobama) i 10 njihovih opisa (varijabli).
+
+Deskriptivnu statistiku moguće je dobiti naredbom `summary(habits)`, dodatno prvih nekoliko redaka iz skupa podataka moguće je dohvatiti naredbom `head(habits)`.
+
+Izvođenjem naredbe `sum(is.na(habits$StateDesc))` dobiven je uvid u broj nedostajućih vrijednosti za varijablu `StateDesc` koja identificira pojedinu saveznu državu. Isti postupak izveden je za sve ostale varijable iz skupa podataka. Budući da su navedene vrijednosti bile jednake nuli za svaki izračun, zaključujemo da skup ne sadrži nedostajuće vrijednosti. 
+
+
+# 1. ZADATAK
+
+Nakon što smo se bolje upoznali s našim podatcima, možemo si postaviti neka zanimljiva pitanja i pokušati odgovoriti na njih koristeći razne statističke alate.
+
+Primjerice, pokušajmo odgovoriti na sljedeće pitanje: postoji li neka nezdrava navika koja je manje ”popularna” u saveznoj državi Arizoni nego u saveznoj državi Tennessee (odnosno, za koju je udio stanovnika savezne države Arizona manji od udjela stanovnika savezne države Tennessee)?
+
+Prvo ćemo iz zadanog skupa podataka izračunati ukupnu veličinu populacije za saveznu državu Arizonu te za saveznu državu Tennessee za dane gradove. Također, za obje savezne države ćemo izračunati veličinu podskupa populacije koji prakticira svaku od 4 nezdrave navike.
+
+Analizu započinje učitavanjem podataka vezanih uz navedene savezne države i izdvajamo retke koji se odnose na nezdrave navike.
+
+```{r Dobivanje podataka za određenu nezdravu naviku}
+# svi redovi gdje je država = Arizona ili Tennessee:
+data = crd_habits[crd_habits$StateDesc =="Arizona"| crd_habits$StateDesc =="Tennessee",]
+
+# svi redovi gdje je Category = Unhealthy Behaviors:
+data = data[data$Category =="Unhealthy Behaviors",]
+
+
+# potrebno izvesti install.packages("dplyr") u consoli
+```
+ 
+U nastavku analize podatci su grupirani s obzirom na saveznu državu i nezdravu naviku te je za svaki tako dobiveni redak izračunat broj ljudi koji imaju konkretnu nezdravu naviku kao i ukupan broj ljudi u uzroku koji dolaze iz Arizone ili Tennesseeja.  
+
+```{r }
+library(dplyr)
+
+groupData = data %>% group_by(StateDesc, Short_Question_Text) %>% 
+              summarise(UnhealthyCount 
+          = round(sum(PopulationCount * Data_Value / 100), digits = 0), 
+              PopulationCount = sum(PopulationCount))
+groupData
+
+```
+
+Nakon što smo grupirali podatke, iz dobivene tablice izvući ćemo zasebno podatke za svaku nezdravu naviku.
+
+```{r Populacija}
+
+UkupnaPopulacija = c(
+  sum(data[data$StateDesc == "Arizona","PopulationCount"]) / 4, 
+  sum(data[data$StateDesc == "Tennessee","PopulationCount"]) / 4
+  )
+
+BingeDrinkingPopulacija = c(
+  round(groupData[groupData$StateDesc == "Arizona" 
+          & groupData$Short_Question_Text == "Binge Drinking",
+          "UnhealthyCount"][[1]][1], digits = 0),
+  round(groupData[groupData$StateDesc == "Tennessee" 
+          & groupData$Short_Question_Text == "Binge Drinking",
+          "UnhealthyCount"][[1]][1], digits = 0)
+)
+
+CurrentSmokingPopulacija = c(
+  round(groupData[groupData$StateDesc == "Arizona" 
+          & groupData$Short_Question_Text == "Current Smoking",
+          "UnhealthyCount"][[1]][1], digits = 0),
+  round(groupData[groupData$StateDesc == "Tennessee" 
+          & groupData$Short_Question_Text == "Current Smoking",
+          "UnhealthyCount"][[1]][1], digits = 0)
+)
+
+ObesityPopulacija = c(
+  round(groupData[groupData$StateDesc == "Arizona" 
+          & groupData$Short_Question_Text == "Obesity",
+          "UnhealthyCount"][[1]][1], digits = 0),
+  round(groupData[groupData$StateDesc == "Tennessee"
+          & groupData$Short_Question_Text == "Obesity",
+          "UnhealthyCount"][[1]][1], digits = 0)
+)
+
+PhysicalInactivityPopulacija = c(
+  round(groupData[groupData$StateDesc == "Arizona" 
+          & groupData$Short_Question_Text == "Physical Inactivity",
+          "UnhealthyCount"][[1]][1], digits = 0),
+  round(groupData[groupData$StateDesc == "Tennessee" 
+          & groupData$Short_Question_Text == "Physical Inactivity",
+          "UnhealthyCount"][[1]][1], digits = 0)
+)
+```
+
+Time smo za svaku nezdravu naviku dobili broj ljudi koji ju prakticira u saveznoj državi Arizoni i broj ljudi koji ju prakticira u saveznoj državi Tennessee. Potom ćemo za svaku nezdravu naviku napraviti Z-test o dvije proporcije, koji je u R-u implementiran u funkciji `prop.test()`.
+
+Postavimo hipoteze i provedimo testiranje.
+
+$$H_0 : p_A >= p_T $$
+$$H_1 :  p_A < p_T $$
+U navedenim hipotezama sada $p_A$ predstavlja udio stanovnika savezne države Arizona koji prakticira  neku nezdravu naviku, analogno vrijedi i za oznaku $p_T$ koja se odnosi na saveznu državu Tennessee.
+
+
+Slijedi testiranje postavljenih hipoteza za sljedeće nezdrave navike: konzumiranje alkohola, pušenje, pretilost i fizičku neaktivnost.
+```{r Testiranje hipoteza}
+prop.test(BingeDrinkingPopulacija, UkupnaPopulacija, alternative = "less")
+prop.test(CurrentSmokingPopulacija, UkupnaPopulacija, alternative = "less")
+prop.test(ObesityPopulacija, UkupnaPopulacija, alternative = "less")
+prop.test(PhysicalInactivityPopulacija, UkupnaPopulacija, alternative = "less")
+
+```
+
+Rezultati testiranja pokazali su da, zbog p-vrijednosti iznosa 1 za nezdravu naviku prekomjernog konzumiranja alkohola, ne možemo odbaciti hipotezu $H_0$ u korist hipoteze $H_1$. Za preostale tri navike, međutim, zbog jako male p-vrijednosti iznosa < 2.2e-16 odbacujemo nultu hipotezu te zaključujemo da su pušenje, pretilost i nedovoljno fizičke aktivnosti manje zastupljeni u saveznoj državi Arizoni nego u saveznoj državi Tennessee.
+
+Vizualizirat ćemo dobivene podatke stupčastim dijagramom.
+
+```{r Prikaz stupcastog diagrama}
+groupDataPercentile = data %>% group_by(StateDesc, Short_Question_Text) %>% 
+  summarise(percentile = 
+              sum(PopulationCount * Data_Value) / sum(PopulationCount))
+
+
+
+library(ggplot2)
+p <- ggplot(groupDataPercentile, aes(x = Short_Question_Text, y = percentile)) +
+  geom_bar(
+    aes(color = StateDesc, fill = StateDesc),
+    stat = "identity", position = position_dodge(0.8),
+    width = 0.7
+    ) +
+  scale_color_manual(values = c("#0073C2FF", "#EFC000FF")) +
+  scale_fill_manual(values = c("#0073C2FF", "#EFC000FF"))
+p
+
+
+
+```
+
+Sada kada pogledamo prikaz podataka u stupčastom dijagramu, jasno nam je zašto smo u prvom testu dobili p-vrijednost = 1, s obzirom na to da i sam postotak jasno pokazuje da je nezdrava navika prekomjernog konzumiranja alkohola zastupljenija u saveznoj državi Arizoni.
+
+
+# 2. ZADATAK
+
+U sljedećem koraku analize dobivenih podataka o stanovništvu saveznih država i njihovim nezdravim navikama i zdravstvenim tegobama, postavljamo sljedeće pitanje: za određenu zdravstvenu tegobu i proizvoljan broj odabranih saveznih država, je li postotak stanovništva koji boluje od odabrane bolesti jednak u svima od tih država?
+
+Konkretno, u ovoj analizi odlučujemo se za sljedeće savezne države: New York, Floridu i Illinois i pokušavamo odrediti je li postotak stanovništva koji boluje od dijabetesa jednak za sve tri navedene države.
+
+
+Za početak, izvlačimo podatke potrebne u daljnjem tijeku analize. Iz početno selektiranih podataka izvlačimo one koji se odnose na saveznu državu New York, odnosno one kojima varijabla `StateDesc` poprima vrijednost `New York`. Budući da smo za daljnju analizu odabrali dijabetes kao bolest po kojoj radimo usporedbu, dodatno izvlačimo retke kojima varijabla `Short_Question_Text` poprima vrijednost `Diabetes`.
+
+```{r}
+
+NewYork = crd_habits[crd_habits['StateDesc'] == 'New York' & 
+          crd_habits['Short_Question_Text'] == 'Diabetes', 
+          c('StateDesc', 'CityName', 'Category', 'Measure', 
+            'Data_Value', 'PopulationCount')]
+
+
+sumNYDiabetes = round(sum(NewYork$Data_Value * NewYork$PopulationCount / 100), digits = 0)
+sumNYTotal = sum(NewYork$PopulationCount)
+percentageNY = sumNYDiabetes / sumNYTotal
+
+```
+
+Isti postupak ponavljamo za saveznu državu Floridu.
+
+```{r}
+
+Florida = crd_habits[crd_habits['StateDesc'] == 'Florida' & 
+          crd_habits['Short_Question_Text'] == 'Diabetes', c('StateDesc', 
+                      'CityName', 'Category', 'Measure', 'Data_Value', 
+                      'PopulationCount')]
+
+sumFLDiabetes = round(sum(Florida$Data_Value * Florida$PopulationCount / 100), digits = 0)
+sumFLTotal = sum(Florida$PopulationCount)
+percentageFL = sumFLDiabetes / sumFLTotal
+
+```
+Također, postupak se ponavlja za saveznu državu Illinois.
+```{r}
+
+Illinois = crd_habits[crd_habits['StateDesc'] == 'Illinois' & 
+           crd_habits['Short_Question_Text'] == 'Diabetes', c('StateDesc', 
+                      'CityName', 'Category', 'Measure', 'Data_Value', 
+                      'PopulationCount')]
+
+
+sumILDiabetes = round(sum(Illinois$Data_Value * Illinois$PopulationCount / 100), digits = 0)
+sumILTotal = sum(Illinois$PopulationCount)
+percentageIL = sumILDiabetes / sumILTotal
+
+```
+
+```{r}
+
+observed = matrix(c(sumNYDiabetes, sumNYTotal - sumNYDiabetes, sumFLDiabetes, 
+                    sumFLTotal - sumFLDiabetes, sumILDiabetes, 
+                    sumILTotal - sumILDiabetes), nrow = 2)
+colnames(observed) = c("New York", "Florida", "Illinois")
+rownames(observed) = c("Yes", "No")
+```
+
+Iz tako dobivenih podataka pripremamo kontingencijsku tablicu koja nam služi za provođenje testa homogenosti.
+U nastavku se nalazi kontingencijska tablica kojoj su stupci savezne države New York, Florida i Illinois, a pojedini 
+redak predstavlja broj ljudi koji imaju (`Yes`) i broj ljudi koji nemaju dijabetes (`No`).
+
+
+```{r Kontigencijska tablica}
+observed
+```
+
+Sada imamo pripremljeno sve za obavljanje testa homogenosti. Postavljamo nul-hipotezu i alternativnu hipotezu:\newline
+\space\space\space\space\space\space $H_0$ $:$ $postotak$ $stanovistva$ $koji$ $boluje$ $od$ $dijabetesa$ $jednak$ $za$ $sve$ $tri$ $drzave$
+\newline
+\space\space\space  $H_1$ $:$ $postotak$ $stanovistva$ $koji$ $boluje$ $od$ $dijabetesa$ $nije$ $jednak$ $za$ $sve$ $tri$ $drzave$
+
+Pozivamo metodu `chisq.test()` koja prima pripremljenu kontingencijsku tablicu i na temelju kontingencijske tablice računa
+vrijednost $\chi^2$ statistike te u konačnici i samu $p$-vrijednost na temelju koje donosimo zaključke.
+```{r}
+
+res=chisq.test(observed)
+res
+```
+
+Na temelju izračunate $p$-vrijednosti čiji je iznos skoro jednak nuli i postavljenih hipoteza možemo odbaciti nul-hipotezu $H_0$ u korist alternativne hipoteze $H_1$ i zaključiti kako postotak stanovništva koji boluje od dijabetesa nije jednak za sve tri države. Međutim, valja biti oprezan pri zaključivanju budući da se broj jedinki u uzorku broji u milijunima zbog čega dolazi do efekta da se odbacuju pretpostavke koje su možda točne. Konkretno, iz grafa koji slijedi u nastavku, razumno bi bilo zaključiti kako je postotak stanovništva koji boluje od dijabetesa ipak jednak za sve tri države s obzirom na prikazane vrijednosti unatoč rezultatu testa.
+
+```{r  Stupcasti dijagram New York, Illinois, Florida i dijabetes}
+# svi redovi gdje je država = New York ili Florida ili Illinois:
+data = crd_habits[crd_habits$StateDesc =="New York"| crd_habits$StateDesc =="Florida" | 
+               crd_habits$StateDesc =="Illinois",]
+
+# svi redovi gdje je Short_Question_Text = Diabetes:
+data = data[data$Short_Question_Text =="Diabetes",]
+
+
+groupDataPercentile = data %>% group_by(StateDesc, Short_Question_Text) %>% 
+  summarise(percentile = sum(PopulationCount * Data_Value) / 
+              sum(PopulationCount))
+
+
+p <- ggplot(groupDataPercentile, aes(x = Short_Question_Text, y = percentile)) +
+  geom_bar(
+    aes(color = StateDesc, fill = StateDesc),
+    stat = "identity", position = position_dodge(0.8),
+    width = 0.7
+    ) +
+  scale_color_manual(values = c("#0073C2FF", "#EFC000FF", "#02CA08FF"))+
+  scale_fill_manual(values = c("#0073C2FF", "#EFC000FF", "#02CA08FF"))
+p
+```
+
+Na temelju stupčastog dijagrama sada vidimo kako je postotak stanovništva koji boluje od dijabetesa nešto viši u saveznoj državi Floridi, nego što je to slučaj u saveznim državama Illinois i New York. Budući da su vrijednosti koje predstavljaju postotak stanovništva koji boluje od dijabetesa za Illinois i New York nešto bliže nego što je to slučaj za kombinacije spomenutih država i savezne države Floride, u nastavku analize ćemo provjeriti vrijedi li hipoteza da su postotci stanovništva koji boluje od dijabetesa jednaki za savezne države Illinois i New York. 
+
+Postavljamo nul-hipotezu i alternativnu hipotezu:\newline
+\space\space\space\space\space\space $H_0$ $:$ $postotak$ $stanovistva$ $koji$ $boluje$ $od$ $dijabetesa$ $jednak$ $je$ $za$ $Illinois$ $i$ $New$ $York$
+\newline
+\space\space\space  $H_1$ $:$ $postotak$ $stanovistva$ $koji$ $boluje$ $od$ $dijabetesa$ $nije$ $jednak$ $za$ $Illinois$ $i$ $New$ $York$
+
+```{r}
+observed = matrix(c(sumILDiabetes, sumILTotal - sumILDiabetes,
+                    sumNYDiabetes, sumNYTotal - sumNYDiabetes), nrow = 2)
+
+
+colnames(observed) = c("Illinois", "New York")
+rownames(observed) = c("Yes", "No")
+
+observed
+
+res=chisq.test(observed)
+res
+```
+Na temelju izračunate $p$-vrijednosti čiji je iznos skoro jednak nuli i postavljenih hipoteza možemo odbaciti nul-hipotezu $H_0$ u korist alternativne hipoteze $H_1$ i zaključiti kako postotak stanovništva koji boluje od dijabetesa ipak nije jednak za Illinois i New York. Međutim, ponovno, valja biti oprezan pri zaključivanju, zbog već spomenutog velikog broja jedinki u uzorku. Konkretno, iz grafa koji je prethodno prikazan, razumno bi bilo zaključiti kako je postotak stanovništva koji boluje od dijabetesa ipak jednak za Illinois i New York s obzirom na prikazane vrijednosti unatoč rezultatu testa.
+
+
+
+# 3 Zadatak 
+ 
+Nakon što smo ispitali veze između ovih nezdravih navika i pojedinih bolesti, odlučili smo detaljnije proučiti bolest COPD (Kronična opstruktivna plućna bolest) i ispitati koje nezdrave navike imaju najveći utjecaj na nju.
+
+
+```{r izbor bolesti}
+Imebolest = 'COPD'
+
+```
+
+Izdvojit ćemo nekoliko nama najzanimljivijih modela i detaljno ćemo ih predstaviti.
+
+Pogledajmo kakva je veza između bolesti COPD i svake od 4 nezdrave navike.
+
+```{r scatter plot}
+COPD = crd_habits[crd_habits['Short_Question_Text'] == Imebolest, 'Data_Value']
+Binge_Drinking = crd_habits[crd_habits['Short_Question_Text'] 
+                            == 'Binge Drinking', 'Data_Value']
+Current_Smoking = crd_habits[crd_habits['Short_Question_Text'] 
+                             == 'Current Smoking', 'Data_Value']
+Obesity = crd_habits[crd_habits['Short_Question_Text'] == 'Obesity', 'Data_Value']
+Physical_Inactivity = crd_habits[crd_habits['Short_Question_Text']
+                                 == 'Physical Inactivity', 'Data_Value']
+
+
+
+```
+Na sljedećim grafovima, x os označava postotak ljudi koji prakticira određenu nezdravu naviku, a y os označava postotak ljudi koji boluje od bolesti COPD. Svaka točka predstavlja podatak za jedan od gradova iz ulaznog skupa podataka.
+Izgled grafova upućuju na to da postoji neka vrsta ovisnosti između varijabli Current_Smoking, Obesity i Physical_Inactivity s bolešću COPD, što ćemo u nastavku detaljnije istražiti. 
+Što se tiče varijable Binge_Drinking, njezin graf pokazuje potencijalni blagi negativni trend, što nas je iznenadilo.
+
+Pogledajmo kako izgledaju modeli jednostruke regresije za svaku od 4 nezdrave navike.
+
+```{r jednostavna regresija}
+fit.Binge_Drinking = lm(COPD ~ Binge_Drinking)
+fit.Current_Smoking = lm(COPD ~ Current_Smoking)
+fit.Obesity = lm(COPD ~ Obesity)
+fit.Physical_Inactivity = lm(COPD ~ Physical_Inactivity)
+```
+
+```{r, out.width="50%"}
+plot(Binge_Drinking, COPD)
+abline(fit.Binge_Drinking, col='red')
+
+plot(Current_Smoking, COPD)
+abline(fit.Current_Smoking, col='red')
+
+plot(Obesity, COPD)
+abline(fit.Obesity, col='red')
+
+plot(Physical_Inactivity, COPD)
+abline(fit.Physical_Inactivity, col='red')
+```
+
+
+
+Provjerimo da pretpostavke modela (normalnost reziduala i homogenost varijance) nisu jako narušene.
+
+Normalnost reziduala ispitat ćemo pomoću histograma i QQ-plota, koji nam mogu nam dati njihov okvirni distribucijski dojam. Reziduale je dobro prikazati u ovisnosti o procijenjenim modelima kako bismo ispitali homogenost varijance.
+
+```{r, out.width="50%"}
+
+# Normalnost reziduala
+
+#histogrami normalnosti
+
+hist(rstandard(fit.Binge_Drinking))
+hist(rstandard(fit.Current_Smoking))
+hist(rstandard(fit.Obesity))
+hist(rstandard(fit.Physical_Inactivity))
+
+
+## QQ plot 
+
+qqnorm(rstandard(fit.Binge_Drinking))
+qqline(rstandard(fit.Binge_Drinking))
+
+qqnorm(rstandard(fit.Current_Smoking))
+qqline(rstandard(fit.Current_Smoking))
+
+qqnorm(rstandard(fit.Obesity))
+qqline(rstandard(fit.Obesity))
+
+qqnorm(rstandard(fit.Physical_Inactivity))
+qqline(rstandard(fit.Physical_Inactivity))
+
+
+# Homogenost Varijance
+
+plot(fit.Binge_Drinking$fitted.values, fit.Binge_Drinking$residuals)
+plot(fit.Current_Smoking$fitted.values, fit.Current_Smoking$residuals)
+plot(fit.Obesity$fitted.values, fit.Obesity$residuals)
+plot(fit.Physical_Inactivity$fitted.values, fit.Physical_Inactivity$residuals)
+
+
+```
+
+Histogrami pokazuju da reziduali nemaju previše iskrivljene distribucije, a iz QQ-plotova vidimo da nemaju previše teške repove, iz čega možemo zaključiti da reziduali imaju približno normalnu distribuciju, što je u redu jer su testovi koje ovdje koristimo u analizi regresijskih modela ionako robusni na normalnost.
+
+Iz grafova procijenjenih vrijednosti i reziduala vidimo da varijanca ne varira toliko jako da bismo trebali posumnjati u njenu homogenost.
+
+
+Zaključujemo da su pretpostavke normalnosti reziduala i homogenosti varijance zadovoljene.
+
+Analizirajmo detaljnije procijenjene modele.
+
+```{r analiza procijenjenih modela}
+summary(fit.Binge_Drinking)
+summary(fit.Current_Smoking)
+summary(fit.Obesity)
+summary(fit.Physical_Inactivity)
+```
+
+Vidimo da na temelju dobivene p-vrijednosti ne možemo odbaciti nultu hipotezu da je kod modela s regresorom Obesity i modela s regresorom Current_Smoking slobodni parametar jednak nuli.
+
+Jako male p-vrijednosti kod F-testova za svaki od modela govore nam da možemo odbaciti hipotezu da su modeli neznačajni.
+
+Na temelju R^2 vrijednosti vidimo da je model s regresorom Current_Smoking najbolji od 4 ispitana modela jednostruke regresije, dok regresor Binge_Drinking najslabije objašnjava varijancu u podacima s R^2 = 0.157.
+
+
+Prije nego donesemo odluku o najboljem modelu, provjerit ćemo ovisnost reziduala modela s regresorom Current_Smoking (fit.Current_Smoking$residuals) s ostalim varijablama.
+
+```{r, out.width="50%"}
+plot(Binge_Drinking, fit.Current_Smoking$residuals)
+plot(Obesity, fit.Current_Smoking$residuals)
+plot(Physical_Inactivity, fit.Current_Smoking$residuals)
+```
+
+
+Vidimo, međutim, da postoji neka zavisnost između promatranih reziduala i varijable Binge_Drinking, što nas potiče na razmišljanje da postoji ovisnost o još nekim regresorima, stoga ćemo dalje u nastavku isprobati nekoliko višeregresorskih modela. 
+
+Isprobat ćemo neke višeregresorske modele, no prije toga ćemo provjeriti korelacijske koeficijente među regresorima pomoću matrice korelacija.
+
+```{r matrica korelacija}
+
+cor(cbind(Binge_Drinking, Current_Smoking, Obesity,Physical_Inactivity))
+
+```
+
+Vidimo da postoji velika korelacija između regresora Obesity i Physical_Inactivity, što smo i očekivali s obzirom da je poznato da manjak fizičke aktivnosti povećava rizik od pretilosti.
+Međutim, nismo očekivali ovako veliku korelaciju između regresora Current_Smoking i Obesity te Current_Smoking i Physical_Inactivity.
+Za najveću dopuštenu granicu korelacije među ulaznim varijablama uzeli smo korelaciju od 80%.
+
+Proučimo sada neke višeregresorske modele.
+
+Odlučili smo se za kombinacije regresora među kojima je Current_Smoking jer se pokazao najznačajnijim regresorom kod jednostrukih modela (međutim, isprobali smo i kombinacije u kojima nema tog regresora, za svaki slučaj).
+
+Prikažimo neke od modela za koje smatramo da bi mogli biti dobri. 
+
+``` {r, out.width="50%"}
+# Kombinacija regresora Current_Smoking i Obesity
+fit.multi_1_2 = lm(COPD ~ Current_Smoking + Obesity)
+summary(fit.multi_1_2)
+#plot(fit.multi_1_2$fitted.values, fit.multi_1_2$residuals)
+
+
+# Kombinacija regresora Current_Smoking i Physical_Inactivity
+fit.multi_1_3 = lm(COPD ~ Current_Smoking + Physical_Inactivity)
+summary(fit.multi_1_3)
+#plot(fit.multi_1_3$fitted.values, fit.multi_1_3$residuals)
+
+# Kombinacija regresora Current_Smoking i Binge_Drinking
+fit.multi_1_4 = lm(COPD ~ Current_Smoking + Binge_Drinking)
+summary(fit.multi_1_4)
+plot(fit.multi_1_4$fitted.values, fit.multi_1_4$residuals)
+hist(rstandard(fit.multi_1_4))
+
+# Kombinacija regresora Current_Smoking i Physical Inactivity i Binge_Drinking
+fit.multi_1_3_4 = lm(COPD ~ Current_Smoking + Physical_Inactivity + Binge_Drinking)
+summary(fit.multi_1_3_4)
+ # plot(fit.multi_1_3_4$fitted.values, fit.multi_1_3_4$residuals)
+
+
+```
+
+Podatci o modelu s tri regresora pokazuju da na razini značajnosti od 5% možemo odbaciti tvrdnju da je varijabla Physical_Inactivity značajna, što nismo očekivali s obzirom na to da je u modelu jednostruke regresije davala bolji model od modela s regresorom Binge_Drinking. Isti rezultat daje i troregresorski model s regresorom Obesity. Na temelju toga zaključujemo da modele s ta tri regresora nema smisla koristiti.
+
+Zanimljivo je primijetiti da je Binge_Drinking kao samostalni regresor davao najlošiji model, ali u kombinaciji s regresorom Current_Smoking daje najveću vrijednost R^2. To možemo objasniti činjenicom da je korelacijski koeficijent za regresore Current_Smoking i Binge_Drinking puno manji od koeficijenata ostalih kombinacija regresora, stoga oni opisuju različite efekte na promatranu bolest.
+
+
+Promatrajući R^2 vrijednosti dobivenih modela, zaključujemo da je najbolji model s regresorima Current_Smoking i Binge_Drinking jer ima najveću R^2 vrijednost te objašnjava približno $79.17\%$ varijance u podatcima.
